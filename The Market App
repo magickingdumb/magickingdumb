@@ -1,0 +1,247 @@
+from kivy.uix.screenmanager import ScreenManager, Screen
+from kivy.uix.gridlayout import GridLayout
+from kivy.uix.scrollview import ScrollView
+from kivy.uix.label import Label
+from kivy.uix.image import AsyncImage
+from kivy.uix.image import Image
+from kivy.uix.button import Button
+from kivy.app import App
+from kivy.uix.textinput import TextInput
+
+
+class MarketScreen(Screen):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        
+        self.back_button = Button(text='Back', size_hint=(0.1, 0.1), pos_hint={'x': 0, 'y': 0})
+        self.back_button.bind(on_release=self.go_back)
+        self.add_widget(self.back_button)
+        self.marketplace_button = Button(text='Marketplace', pos_hint={'center_x': 0.5, 'center_y': 0.7}, size_hint=(0.2, 0.1))
+        self.marketplace_button.bind(on_release=self.go_to_marketplace)
+        self.add_widget(self.marketplace_button)
+        self.contact_button = Button(text='Contact', pos_hint={'center_x': 0.5, 'center_y': 0.5}, size_hint=(0.2, 0.1))
+        self.contact_button.bind(on_release=self.go_to_contact)
+        self.add_widget(self.contact_button)
+        # ...
+    def go_back(self, instance):
+        self.manager.current = 'home'
+
+    def go_to_marketplace(self, instance):
+        self.manager.current = 'marketplace'
+
+    def go_to_contact(self, instance):
+        self.manager.current = 'contact'
+
+class ProductWidget(GridLayout):
+    def __init__(self, screen_manager, product_image, product_description, product_price, product_rating, **kwargs):
+        super().__init__(**kwargs)
+        self.cols = 2
+        self.spacing = 10
+        
+        self.screen_manager = screen_manager
+        self.bind(on_release=self.go_to_payment_screen)
+
+        self.product_image = AsyncImage(source=product_image, size_hint=(0.5, 1))
+        self.add_widget(self.product_image)
+
+        self.product_info = GridLayout(cols=1, spacing=10)
+        self.product_description = Label(text=product_description, size_hint=(1, 0.2))
+        self.product_info.add_widget(self.product_description)
+
+        self.product_price = Label(text='Price: $' + str(product_price), size_hint=(1, 0.1))
+        self.product_info.add_widget(self.product_price)
+
+        self.rating_layout = GridLayout(cols=5, spacing=5)
+        self.rating_star_1 = Image(source='star.png' if product_rating >= 1 else 'star_empty.png', size_hint=(None, None), size=(20, 20))
+        self.rating_layout.add_widget(self.rating_star_1)
+        self.rating_star_2 = Image(source='star.png' if product_rating >= 2 else 'star_empty.png', size_hint=(None, None), size=(20, 20))
+        self.rating_layout.add_widget(self.rating_star_2)
+        self.rating_star_3 = Image(source='star.png' if product_rating >= 3 else 'star_empty.png', size_hint=(None, None), size=(20, 20))
+        self.rating_layout.add_widget(self.rating_star_3)
+        self.rating_star_4 = Image(source='star.png' if product_rating >= 4 else 'star_empty.png', size_hint=(None, None), size=(20, 20))
+        self.rating_layout.add_widget(self.rating_star_4)
+        self.rating_star_5 = Image(source='star.png' if product_rating >= 5 else 'star_empty.png', size_hint=(None, None), size=(20, 20))
+        self.rating_layout.add_widget(self.rating_star_5)
+        self.product_info.add_widget(self.rating_layout)
+
+        self.add_widget(self.product_info)
+
+    def go_back(self, instance):
+        screen_manager = instance.parent.parent.parent
+        screen_manager.transition.direction = 'right'
+        screen_manager.current = screen_manager.previous()
+
+    def go_to_payment_screen(self, instance):
+        self.screen_manager.current = 'payment'
+
+class MarketplaceScreen(Screen):
+    def __init__(self, screen_manager, **kwargs):
+        super().__init__(**kwargs)
+        self.screen_manager = kwargs['screen_manager']
+        self.screen_manager = screen_manager
+        self.product_list = GridLayout(cols=1, spacing=10, size_hint_y=None)
+        self.product_list.bind(minimum_height=self.product_list.setter('height'))
+        self.add_widget(self.product_list)
+
+        self.back_button = Button(text='Back', size_hint=(0.1, 0.1), pos_hint={'x': 0, 'y': 0})
+        self.back_button.bind(on_release=self.go_back)
+        self.add_widget(self.back_button)
+        self.product_list = ScrollView(size_hint=(1, 0.9), pos_hint={'center_x': 0.5, 'center_y': 0.5})
+        self.products = GridLayout(cols=1, spacing=10, size_hint_y=None)
+        self.products.bind(minimum_height=self.products.setter('height'))
+        self.product_list.add_widget(self.products)
+        self.add_widget(self.product_list)
+
+        self.product_list.add_widget(ProductWidget(screen_manager=screen_manager, text='Product_1'))
+        self.product_list.add_widget(ProductWidget(screen_manager=screen_manager, text='Product_2'))
+        self.product_list.add_widget(ProductWidget(screen_manager=screen_manager, text='Product_3'))
+
+class BackButton(Button):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.text = 'Back'
+        self.bind(on_release=self.go_back)
+
+    def go_back(self, instance):
+        screen_manager = instance.parent.parent.parent
+        screen_manager.transition.direction = 'right'
+        screen_manager.current = screen_manager.previous()
+
+class ContactScreen(Screen):
+    def __init__(self, screen_manager, **kwargs):
+        super().__init__(**kwargs)
+        self.back_button = Button(text='Back', size_hint=(0.1, 0.1), pos_hint={'x': 0, 'y': 0})
+        self.back_button.bind(on_release=self.go_back)
+        self.add_widget(self.back_button)
+        self.layout = GridLayout(cols=1, spacing=10, padding=10)
+        self.home_button = Button(text='Home', pos_hint={'center_x': 0.1, 'center_y': 0.1}, size_hint=(0.2, 0.1))
+        self.home_button.bind(on_release=self.go_to_home)
+        self.add_widget(self.home_button)
+        self.marketplace_button = Button(text='Marketplace', pos_hint={'center_x': 0.9, 'center_y': 0.1}, size_hint=(0.2, 0.1))
+        self.marketplace_button.bind(on_release=self.go_to_marketplace)
+        self.add_widget(self.marketplace_button)
+        self.add_widget(Label(text='Email:', pos_hint={'center_x': 0.1, 'center_y': 0.7}))
+        self.email_input = TextInput(pos_hint={'center_x': 0.5, 'center_y': 0.7})
+        self.add_widget(self.email_input)
+        self.add_widget(Label(text='Message:', pos_hint={'center_x': 0.1, 'center_y': 0.5}))
+        self.message_input = TextInput(pos_hint={'center_x': 0.5, 'center_y': 0.5})
+        self.add_widget(self.message_input)
+        self.connect_button = Button(text='Connect Now', pos_hint={'center_x': 0.5, 'center_y': 0.3}, size_hint=(0.2, 0.1))
+        self.connect_button.bind(on_release=self.connect)
+        self.add_widget(self.connect_button)
+        self.add_widget(self.layout)
+
+    def go_to_home(self, instance):
+        self.manager.current = 'home'
+
+    def go_to_marketplace(self, instance):
+        self.manager.current = 'marketplace'
+
+    def connect(self, instance):
+        email = self.email_input.text
+        message = self.message_input.text
+        # send email or message to desired recipient here
+
+    def go_back(self, instance):
+        screen_manager = instance.parent.parent.parent
+        screen_manager.transition.direction = 'right'
+        screen_manager.current = screen_manager.previous()
+
+class PaymentScreen(Screen):
+    def __init__(self, screen_manager, **kwargs):
+        super().__init__(**kwargs)
+        self.back_button = Button(text='Back', size_hint=(0.1, 0.1), pos_hint={'x': 0, 'y': 0})
+        self.back_button.bind(on_release=self.go_back)
+        self.add_widget(self.back_button)
+        self.home_button = Button(text='Home', pos_hint={'center_x': 0.1, 'center_y': 0.1}, size_hint=(0.2, 0.1))
+        self.home_button.bind(on_release=self.go_to_home)
+        self.add_widget(self.home_button)
+        self.marketplace_button = Button(text='Marketplace', pos_hint={'center_x': 0.9, 'center_y': 0.1}, size_hint=(0.2, 0.1))
+        self.marketplace_button.bind(on_release=self.go_to_marketplace)
+        self.add_widget(self.marketplace_button)
+        self.add_widget(Label(text='Name:', pos_hint={'center_x': 0.1, 'center_y': 0.7}))
+        self.name_input = TextInput(pos_hint={'center_x': 0.5, 'center_y': 0.7})
+        self.add_widget(self.name_input)
+        self.add_widget(Label(text='Email:', pos_hint={'center_x': 0.1, 'center_y': 0.5}))
+        self.email_input = TextInput(pos_hint={'center_x': 0.5, 'center_y': 0.5})
+        self.add_widget(self.email_input)
+        self.add_widget(Label(text='Address:', pos_hint={'center_x': 0.1, 'center_y': 0.3}))
+        self.address_input = TextInput(pos_hint={'center_x': 0.5, 'center_y': 0.3})
+        self.add_widget(self.address_input)
+        self.pay_button = Button(text='Pay Now', pos_hint={'center_x': 0.5, 'center_y': 0.1}, size_hint=(0.2, 0.1))
+        self.pay_button.bind(on_release=self.pay)
+        self.add_widget(self.pay_button)
+
+    def pay(self, instance):
+        name = self.name_input.text
+        email = self.email_input.text
+        address = self.address_input.text
+        print(f'Name: {name}, Email: {email}, Address: {address}')
+
+    def go_back(self, instance):
+        self.manager.current = 'marketplace'
+
+    def go_to_home(self, instance):
+        self.manager.current = 'home'
+
+    def go_to_marketplace(self, instance):
+        self.manager.current = 'marketplace'
+
+class Customer:
+    
+    def init(self, name, budget):
+        self.name = name
+        self.budget = budget
+    
+    def go_to_marketplace(self, instance):
+        self.marketplace = instance
+        print(f"{self.name} has entered the {self.marketplace.name} marketplace.")
+
+class Marketplace:
+    def init(self, name, items):
+        
+        self.name = name
+        self.items = items
+    def list_items(self):
+        print(f"The following items are available in the {self.name} marketplace:")
+        for i, item in enumerate(self.items, 1):
+            print(f"{i}. {item}")
+            marketplace = Marketplace("SuperMart", ["apple", "banana", "carrot", "durian"])
+
+            customer = Customer("John", 1000)
+
+            customer.go_to_marketplace(marketplace)
+            marketplace.list_items()
+    
+    def go_back(self, instance):
+        screen_manager = instance.parent.parent.parent
+        screen_manager.transition.direction = 'right'
+        screen_manager.current = screen_manager.previous()
+    
+class SomeScreen(Screen):
+    # ...
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        # ...
+        self.payment_button = Button(text='Go to Payment', size_hint=(0.2, 0.1), pos_hint={'x': 0.4, 'y': 0})
+        self.payment_button.bind(on_release=self.go_to_payment)
+        self.add_widget(self.payment_button)
+
+    def go_to_payment(self, instance):
+        self.manager.current = 'payment'
+
+class MarketApp(App):
+    def build(self):
+        sm = ScreenManager()
+        sm.add_widget(MarketScreen(name='home'))
+        marketplace_screen = MarketplaceScreen(name='marketplace')
+        marketplace_screen.products.add_widget(ProductWidget(product_image='ONE.png', product_description='Product 1 Description', product_price=10, product_rating=4))
+        marketplace_screen.products.add_widget(ProductWidget(product_image='ONE.png', product_description='Product 2 Description', product_price=20, product_rating=3))
+        marketplace_screen.products.add_widget(ProductWidget(product_image='ONE.png', product_description='Product 3 Description', product_price=30, product_rating=5))
+        sm.add_widget(marketplace_screen)
+        sm.add_widget(ContactScreen(name='contact'))
+        sm.add_widget(PaymentScreen(name='payment'))
+        return sm
+
+if __name__ == '__main__':
+    MarketApp().run()
