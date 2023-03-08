@@ -1,0 +1,82 @@
+# Here is a dice game to add to you profolio!
+
+#include <SFML/Graphics.hpp>
+#include <cstdlib>
+#include <ctime>
+#include <sstream>
+
+using namespace std;
+
+int main() {
+    // Create window
+    sf::RenderWindow window(sf::VideoMode(400, 400), "Dice Game");
+
+    // Create font and text objects for displaying score
+    sf::Font font;
+    font.loadFromFile("arial.ttf");
+    sf::Text playerScoreText("", font, 24);
+    sf::Text computerScoreText("", font, 24);
+    playerScoreText.setPosition(50, 50);
+    computerScoreText.setPosition(250, 50);
+
+    // Create dice sprite and texture objects
+    sf::Texture diceTexture;
+    diceTexture.loadFromFile("dice.png");
+    sf::Sprite playerDice(diceTexture);
+    sf::Sprite computerDice(diceTexture);
+    playerDice.setPosition(100, 200);
+    computerDice.setPosition(250, 200);
+
+    // Seed random number generator
+    srand(time(0));
+
+    int playerScore = 0, computerScore = 0;
+    char playAgain = 'y';
+
+    while (window.isOpen()) {
+        // Handle events
+        sf::Event event;
+        while (window.pollEvent(event)) {
+            if (event.type == sf::Event::Closed) {
+                window.close();
+            }
+            else if (event.type == sf::Event::KeyPressed && event.key.code == sf::Keyboard::Space) {
+                // Player's turn
+                int diceRoll = rand() % 6 + 1;
+                playerDice.setTextureRect(sf::IntRect((diceRoll - 1) * 64, 0, 64, 64));
+                playerScore += diceRoll;
+
+                // Computer's turn
+                diceRoll = rand() % 6 + 1;
+                computerDice.setTextureRect(sf::IntRect((diceRoll - 1) * 64, 0, 64, 64));
+                computerScore += diceRoll;
+
+                // Update score text
+                ostringstream playerScoreStr, computerScoreStr;
+                playerScoreStr << "Your score: " << playerScore;
+                computerScoreStr << "Computer score: " << computerScore;
+                playerScoreText.setString(playerScoreStr.str());
+                computerScoreText.setString(computerScoreStr.str());
+            }
+            else if (event.type == sf::Event::KeyPressed && event.key.code == sf::Keyboard::Escape) {
+                // Ask if player wants to play again
+                playAgain = 'n';
+                if (sf::Keyboard::isKeyPressed(sf::Keyboard::Y)) {
+                    playAgain = 'y';
+                    playerScore = 0;
+                    computerScore = 0;
+                }
+            }
+        }
+
+        // Clear screen and draw objects
+        window.clear();
+        window.draw(playerDice);
+        window.draw(computerDice);
+        window.draw(playerScoreText);
+        window.draw(computerScoreText);
+        window.display();
+    }
+
+    return 0;
+}
