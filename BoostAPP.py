@@ -1,370 +1,432 @@
-import json
-from datetime import datetime
-import os   # For saving the username and password
-import openai   # For the AI
-from kivy.animation import Animation    
-from kivy.app import App
-from kivy.uix.boxlayout import BoxLayout
-from kivy.uix.button import Button
-from kivy.uix.label import Label
-from kivy.uix.screenmanager import Screen, ScreenManager, SlideTransition
-from kivy.uix.textinput import TextInput
-from kivy.uix.relativelayout import RelativeLayout
-from kivy.uix.scrollview import ScrollView
-from kivy.properties import ObjectProperty
-from kivy.uix.card import Card
+from kivy.lang import Builder
+from kivy.uix.screenmanager import ScreenManager, Screen, SlideTransition
 from kivymd.app import MDApp
-from kivy.uix.card import MDCard
-from kivymd.uix.dialog import MDDialog
-from kivymd.uix.list import OneLineListItem, MDList
-from kivymd.uix.menu import MDDropdownMenu
-from kivymd.uix.snackbar import Snackbar
+from kivymd.uix.button import button
+from kivymd.uix.button import MDFlatButton, MDRaisedButton, MDRectangleFlatButton, MDFloatingActionButton, MDIconButton
+from kivymd.uix.boxlayout import MDBoxLayout
 from kivymd.uix.textfield import MDTextField
-from kivymd.uix.button import MDRaisedButton, MDFlatButton
+from kivymd.uix.snackbar import Snackbar
+from kivy.uix.floatlayout import FloatLayout
+from kivy.uix.boxlayout import BoxLayout
+from kivy.uix.label import Label
+from kivy.properties import StringProperty, ObjectProperty
+from kivymd.uix.label import MDLabel
+from kivy.utils import escape_markup
+from kivymd.uix.list import MDList, OneLineListItem
+from kivymd.uix.dialog import MDDialog
+from kivymd.uix.card import MDCard
+from datetime import datetime
+import re
+import json
+from kivy.app import App
+from kivy.network.urlrequest import UrlRequest
+from kivy.uix.scrollview import ScrollView
 
-openai.api_key = "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"
+from user_database import create_users_table, add_user, check_user_credentials, get_all_usernames
+from article_screen import ArticleScreen
+from market_analysis_screen import MarketAnalysisScreen
 
 class LoginScreen(Screen):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.username_input = MDTextField(hint_text="Enter your username", size_hint=(.8, None), height=50)
-        self.password_input = MDTextField(hint_text="Enter your password", size_hint=(.8, None), height=50, password=True)
-        self.login_button = MDRaisedButton(text="Log in", size_hint=(.8, None), height=50)
-        self.login_button.bind(on_release=self.login_submit)
-        layout = BoxLayout(orientation='vertical')
-        layout.add_widget(self.username_input)
-        layout.add_widget(self.password_input)
-        layout.add_widget(self.login_button)
-        self.add_widget(layout)
+    def __init__(self, main_app=None, on_login=None, **kwargs):
+        super(LoginScreen, self).__init__(**kwargs)
+        self.main_app = main_app
+        self.on_login = on_login
+        self.layout = FloatLayout()
+        self.add_widget(self.layout)
 
-    def login_submit(self, instance):
+        self.username_input = MDTextField(hint_text="Username", size_hint=(0.8, None), height=50, pos_hint={"x": 0.1, "y": 0.55})
+        self.password_input = MDTextField(hint_text="Password", size_hint=(0.8, None), height=50, password=True, pos_hint={"x": 0.1, "y": 0.45})
+
+        self.login_button = MDRaisedButton(text="Login", on_release=self.login, pos_hint={"x": 0.1, "y": 0.35})
+        self.register_button = MDRaisedButton(text="Register", on_release=self.register, pos_hint={"x": 0.1, "y": 0.25})
+        self.profile_button = MDRaisedButton(text="Profile", on_release=self.go_to_profile_screen, pos_hint={"x": 0.1, "y": 0.15})
+        self.news_feed_button = MDRaisedButton(text="Go to News Feed", on_release=self.go_to_news_feed_screen, pos_hint={"x": 0.3, "y": 0.4})
+        self.market_analysis_button = MDRaisedButton(text="Market Analysis", on_release=self.go_to_market_analysis_screen, pos_hint={"x": 0.1, "y": 0.05})
+        self.logout_button = MDRaisedButton(text="Logout", on_release=self.logout, pos_hint={"x": 0.1, "y": 0.05})
+        self.search_button = MDRaisedButton(text="Search", on_release=self.search, pos_hint={"x": 0.1, "y": 0.05})
+
+        self.layout.add_widget(self.username_input)
+        self.layout.add_widget(self.password_input)
+        self.layout.add_widget(self.login_button)
+        self.layout.add_widget(self.register_button)
+        self.layout.add_widgit(self.logout_button)
+        self.layout.add_widget(self.profile_button)
+        self.layout.add_widget(self.news_feed_button)
+        self.layout.add_widget(self.market_analysis_button)
+
+    def login(self, instance):
         username = self.username_input.text
         password = self.password_input.text
-        with open("users.json", "r") as f:
-            users = json.load(f)
-        if username in users and users[username]['password'] == password:
-            user_info = {"username": username, "last_login": datetime.now().strftime("%m/%d/%Y %H:%M:%S")}
-            app = MDApp.get_running_app()
-            app.user_info = user_info
-            app.home_screen.update_info()
-            app.switch_screen('home', direction='left')
-            with open("user_info.json", "r") as f:  # Save the username and password in user_info.json
-                json.dump(user_info, f)
+        user_info = check_user_credentials(username, password)
+        if user_info:
+            self.on_login(user_info)
+            self.manager.current = "profile"
         else:
             Snackbar(text="Invalid username or password").open()
-class HomeScreen(Screen):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.username_label = Label(text="", size_hint=(.8, None), height=50)
-        self.last_login_label = Label(text="", size_hint=(.8, None), height=50)
-        self.logout_button = MDRaisedButton(text="Logout", size_hint=(.8, None), height=50)
-        self.logout_button.bind(on_release=self.logout_submit)
 
-        layout = BoxLayout(orientation='vertical')
-        layout.add_widget(self.username_label)
-        layout.add_widget(self.last_login_label)
-        layout.add_widget(self.logout_button)
-        self.add_widget(layout)
+    def go_to_news_feed_screen(self, instance):
+        self.manager.current = "news_feed"
+        NewsFeedScreen = NewsFeedScreen()
 
-    def update_info(self):
-        app = MDApp.get_running_app()
-        self.username_label.text = "Username: " + app.user_info["username"]
-        self.last_login_label.text = "Last login: " + app.user_info["last_login"]
+    def go_to_market_analysis_screen(self, instance):
+        self.manager.current = "market_analysis"
+        MarketAnalysisScreen = MarketAnalysisScreen()
 
-    def logout_submit(self, instance):
-        app = MDApp.get_running_app()
-        app.user_info = {}
-        app.switch_screen('login', direction='right')
+    def register(self, instance):
+        self.manager.current = "register"
+        RegisterScreen = RegisterScreen()
 
+    def logout(self, instance):
+        self.manager.current = "login"
+        LoginScreen = LoginScreen()
 
-class HomeScreen(Screen):
-    def __init__(self, user_info, **kwargs):
-        super().__init__(**kwargs)
-        self.user_info = user_info
+    def search(self, instance):
+        self.manager.current = "search"
+        SearchScreen = SearchScreen()
 
-        card = MDCard(
-            padding=20,
-            size_hint=(.8, .6),
-            pos_hint={'center_x': .5, 'center_y': .5},
-            orientation="vertical"
-        )
+    def go_to_profile_screen(self, instance):
+        self.manager.current = "profile_screen"
+        ProfileScreen = ProfileScreen()
 
-        box_layout = BoxLayout(orientation='vertical')
-        label = Label(
-            text="SystemEnhance™ | Make your work easier and faster with SystemEnhance™",
-            halign="center",
-            font_size='20sp',
-            size_hint_y=None,
-            height=50,
-        )
-
-        box_layout.add_widget(label)
-
-        profile_button = Button(
-            text="View Profile",
-            size_hint=(.8, None),
-            height=50
-        )
-        profile_button.bind(on_release=lambda x: self.switch_screen('profile'))
-        box_layout.add_widget(profile_button)
-
-        info_button = Button(
-            text="Info",
-            size_hint=(.8, None),
-            height=50
-        )
-        info_button.bind(on_release=lambda x: self.switch_screen('info'))
-        box_layout.add_widget(info_button)
-
-        search_button = Button(
-            text="Search",
-            size_hint=(.8, None),
-            height=50
-        )
-        search_button.bind(on_release=lambda x: self.switch_screen('search'))
-        box_layout.add_widget(search_button)
-
-        card.add_widget(box_layout)
-        self.add_widget(card)
-
-class ProfileScreen(Screen):
-    user_info = ObjectProperty(None)
-
-    def __init__(self, **kwargs):
-        super(ProfileScreen, self).__init__(**kwargs)
-        self.user_info_data = kwargs.get('user_info', {})
-        self.layout = BoxLayout(orientation='vertical')
+class RegisterScreen(Screen):
+    def __init__(self, main_app, **kwargs):
+        super(RegisterScreen, self).__init__(**kwargs)
+        self.main_app = main_app
+        self.layout = FloatLayout()
         self.add_widget(self.layout)
 
-        title_label = Label(
-            text="User Profile",
-            font_size='30sp',
-            size_hint_y=None,
-            height=50
-        )
+        self.username_input = MDTextField(hint_text="Username", size_hint=(0.8, None), height=50, pos_hint={"x": 0.1, "y": 0.55})
+        self.password_input = MDTextField(hint_text="Password", size_hint=(0.8, None), height=50, password=True, pos_hint={"x": 0.1, "y": 0.45})
+        self.email_input = MDTextField(hint_text="Email", size_hint=(0.8, None), height=50, pos_hint={"x": 0.1, "y": 0.35})
+        register_button = MDRaisedButton(text="Register", on_release=self.register, pos_hint={"x": 0.1, "y": 0.25})
 
-        self.layout.add_widget(title_label)
+        self.layout.add_widget(self.username_input)
+        self.layout.add_widget(self.password_input)
+        self.layout.add_widget(self.email_input)
+        self.layout.add_widget(register_button)
 
-        name_label = Label(
-            text=f"Name: {self.user_info_data.get('name', '')}",
-            font_size='20sp',
-            size_hint_y=None,
-            height=50
-        )
+    def register(self, instance):
+        username = self.username_input.text
+        password = self.password_input.text
+        email = self.email_input.text
 
-        self.layout.add_widget(name_label)
-
-        email_label = Label(
-            text=f"Email: {self.user_info_data.get('email', '')}",
-            font_size='20sp',
-            size_hint_y=None,
-            height=50
-        )
-
-        self.layout.add_widget(email_label)
-
-        logout_button = Button(
-            text="Logout",
-            size_hint=(.8, None),
-            height=50
-        )
-
-        logout_button.bind(on_release=lambda x: self.switch_screen('login'))
-
-        self.layout.add_widget(logout_button)
-
-    def update_info(self):
-        self.clear_widgets()
-        card = MDCard(
-            padding=20,
-            size_hint=(.8, .6),
-            pos_hint={'center_x': .5, 'center_y': .5},
-            orientation="vertical"
-        )
-
-        box_layout = BoxLayout(orientation='vertical')
-        label = Label(
-            text="Profile",
-            halign="center",
-            font_size='20sp',
-            size_hint_y=None,
-            height=50,
-        )
-
-        box_layout.add_widget(label)
-
-        label = Label(
-            text=f"Username: {self.user_info['username']}",
-            halign="center",
-            font_size='20sp',
-            size_hint_y=None,
-            height=50,
-        )
-
-        box_layout.add_widget(label)
-
-        label = Label(
-            text=f"Last login: {self.user_info['last_login']}",
-            halign="center",
-            font_size='20sp',
-            size_hint_y=None,
-            height=50,
-        )
-
-        box_layout.add_widget(label)
-
-        card.add_widget(box_layout)
-        self.add_widget(card)
-
-class BoostApp(App):
-    def switch_screen(self, screen_name):
-        screen_manager = self.root.ids['screen_manager']
-        screen_manager.current = screen_name
-
-    def show_error(self):
-        Snackbar(text="Incorrect username or password").open()
-
-    def show_answer(self, answer):
-        dialog = MDDialog(
-            title="AI Answer",
-            text=answer,
-            buttons=[
-                MDFlatButton(
-                    text="Close",
-                    on_release=lambda dialog: dialog.dismiss()
-                )
-            ]
-        )
-        dialog.open()
-
-    def login(self, username, password):
-        if username == "admin" and password == "admin":
-            self.switch_screen('home')
+        if add_user(username, password, email):
+            Snackbar(text="Registration successful!").open()
+            self.main_app.screen_manager.current = "login"
         else:
-            self.show_error()
+            Snackbar(text="Registration failed. Username or email already exists.").open()
 
-    def build(self):
-        screen_manager = ScreenManager()
+class CustomScreenManager(ScreenManager):
+    def __init__(self, **kwargs):
+        super(CustomScreenManager, self).__init__(**kwargs)
+        self.transition = SlideTransition()
+        self.transition.direction = 'left'
+        self.transition.duration = 0.5
 
-        login_screen = LoginScreen(name='login')
-        login_screen.login_callback = self.login
-        screen_manager.add_widget(login_screen)
-
-        # switch to login screen
-        screen_manager.current = 'login'
-
-        home_screen = HomeScreen(name='home')
-        home_screen.answer_callback = self.show_answer
-        screen_manager.add_widget(home_screen)
-
-        profile_screen = ProfileScreen(name='profile')
-        screen_manager.add_widget(profile_screen)
-
-        return screen_manager
-
-
-class InfoScreen(Screen):
-    def init(self, **kwargs):
-        super().init(**kwargs)
+class BoostEnhanceScreen(Screen):
+    def __init__(self, app, **kwargs):
+        super(BoostEnhanceScreen, self).__init__(**kwargs)
+        self.app = app
         self.layout = BoxLayout(orientation='vertical')
+        
+        self.anchor_layout = AnchorLayout(anchor_x='right', anchor_y='center')
+        self.search_field = MDTextField(hint_text='Enter your search query', size_hint=(0.8, None), height=30)
+        self.anchor_layout.add_widget(self.search_field)
+        self.layout.add_widget(self.anchor_layout)
+        
+        search_button = MDRaisedButton(text='Search', on_release=self.search_query)
+        self.layout.add_widget(search_button)
+        
+        back_button = Button(text='Back', size_hint=(1, 0.1), on_release=self.go_back)
+        self.layout.add_widget(back_button)
+        
         self.add_widget(self.layout)
-        self.info_label = Label(
-        text="SystemEnhance™ is a software platform that helps individuals\
-             and organizations to automate and streamline various tasks.\
-                 The platform uses the latest AI technologies to enhance productivity and efficiency.\
-                     With SystemEnhance™, you can automate tasks such as data entry, content creation,\
-                         customer support, and much more. Whether you're a small business owner or a large enterprise,\
-                             SystemEnhance™ can help you save time and money, while improving the quality of your work.",
-        font_size='20sp',
-        halign='center',
-        size_hint_y=None,
-        height=600,
-        text_size=(600, None)
+
+    def search_query(self, *args):
+        query = self.search_field.text.strip()
+        if query:
+            # Perform the search and display the result in SearchResultsScreen
+            answer = self.app.perform_search(query)
+            self.manager.get_screen('search_results').update_answer(answer)
+            self.manager.current = 'search_results'
+        else:
+            Snackbar(text="Please enter a search query").show()
+
+    def go_back(self, *args):
+        self.manager.current = self.manager.history.pop()
+
+class SearchResultsScreen(Screen):
+    def __init__(self, app, **kwargs):
+        super(SearchResultsScreen, self).__init__(**kwargs)
+        self.app = app
+        self.layout = BoxLayout(orientation='vertical')
+        
+        self.anchor_layout = AnchorLayout(anchor_x='right', anchor_y='center')
+        self.search_field = MDTextField(hint_text='Enter your search query', size_hint=(0.8, None), height=30)
+        self.anchor_layout.add_widget(self.search_field)
+        self.layout.add_widget(self.anchor_layout)
+        
+        search_button = MDRaisedButton(text='Search', on_release=self.search_query)
+        self.layout.add_widget(search_button)
+        
+        back_button = Button(text='Back', size_hint=(1, 0.1), on_release=self.go_back)
+        
+class ProfileScreen(Screen):
+    display_name = StringProperty()
+    description = StringProperty()
+
+    def __init__(self, app, **kwargs):
+        super(ProfileScreen, self).__init__(**kwargs)
+        self.app = app
+
+    def update_display_name(self, display_name):
+        self.display_name = display_name
+        self.description = self.app.get_profile_description(self.display_name)
+        self.description_label.text = self.description
+        self.description_label.size_hint_y = None
+        self.description_label.height = self.description_label.texture_size[1]
+        self.description_label.pos_hint_y = None
+        self.name_label.text = self.display_name
+        self.name_label.size_hint_y = None
+        self.name_label.height = self.name_label.texture_size[1]
+        self.name_label.pos_hint_y = None
+        self.image_label.source = self.app.get_profile_image(self.display_name)
+
+    def update_description(self, description):
+        self.description = description
+        self.description_label.text = self.description
+        self.description_label.size_hint_y = None
+        self.description_label.height = self.description_label.texture_size[1]
+        self.name_label.text = self.display_name
+        self.name_label.size_hint_y = None
+        self.name_label.height = self.name_label.texture_size[1]
+        self.name_label.pos_hint_y = None
+        self.image_label.source = self.app.get_profile_image(self.display_name)
+    
+    def update_image(self, image):
+        self.image_label.source = image
+        self.name_label.text = self.display_name
+        self.name_label.size_hint_y = None
+        self.name_label.height = self.name_label.texture_size[1]
+        self.name_label.pos_hint_y = None
+        self.description_label.text = self.description
+        self.description_label.size_hint_y = None
+        self.description_label.height = self.description_label.texture_size[1]
+        self.name_label.text = self.display_name
+        self.name_label.size_hint_y = None
+        self.name_label.height = self.name_label.texture_size[1]
+        self.name_label.pos_hint_y = None
+
+class MainScreen(Screen):
+    def __init__(self, app, **kwargs):
+        super(MainScreen, self).__init__(**kwargs)
+        self.app = app
+
+        self.layout = BoxLayout(orientation="vertical")
+
+        self.search_bar = MDTextField(
+            hint_text="Enter your query", size_hint=(0.8, None), height=50
         )
-        self.layout.add_widget(self.info_label)
-
-class SearchScreen(Screen):
-    def init(self, **kwargs):
-        super().init(**kwargs)
-        self.layout = BoxLayout(orientation='vertical')
-        self.add_widget(self.layout)
-        self.search_bar = MDTextField(hint_text="Enter your query", size_hint=(.8, None), height=50)
-        self.search_button = MDRaisedButton(text="Search", size_hint=(.8, None), height=50)
+        self.search_button = MDFloatingActionButton(
+            icon="search", pos_hint={"center_x": 0.5, "center_y": 0.1}
+        )
         self.search_button.bind(on_release=self.search)
+
         self.layout.add_widget(self.search_bar)
         self.layout.add_widget(self.search_button)
 
+        self.answer_label = MDLabel(
+            text="", halign="center", theme_text_color="Secondary", size_hint_y=None
+        )
+        self.layout.add_widget(self.answer_label)
+
+        self.add_widget(self.layout)
+
     def search(self, instance):
-        query = self.search_bar.text.strip()    # get the query from the search bar
-        if not query:   # check if the query is empty
-            Snackbar(text="Please enter a query").open()        # show a snackbar if the query is empty
-            return  # exit the function if the query is empty
-        try:
-            result = openai.Completion.create(engine="davinci", prompt=query, max_tokens=100, n=1, stop=None, temperature=0.5)
-            if not result or not result.choices or not result.choices[0] or not result.choices[0].text:
-                raise ValueError()
-            answer = result.choices[0].text.strip()
-            self.show_answer(answer)
-        except:
-            Snackbar(text="Error occurred while searching").open()
+        query = self.search_bar.text
+        response = openai.Completion.create(
+            engine="davinci-instruct-beta",
+            prompt=f"Find information about {query}",
+            max_tokens=100,
+            n=1,
+            stop=None,
+            temperature=0.5,
+        )
 
-def show_answer(self, answer):
-    dialog = MDDialog(
-        title="AI Answer",
-        text=answer,
-        buttons=[
-            MDFlatButton(
-                text="Close",
-                on_release=lambda dialog: dialog.dismiss()
-            )
-        ]
-    )
-    dialog.open()
+        if response and response.choices and response.choices[0]:
+            answer = response.choices[0].text.strip()
+        else:
+            answer = f"No results found for '{query}'"
 
+        search_results_screen = self.app.screen_manager.get_screen("search_results")
+        search_results_screen.update_answer(answer)
+        self.app.screen_manager.current = "search_results"
+    
+    def go_back(self, *args):
+        self.app.go_back()
 
-class BoostEnhanceApp(MDApp):
+class NewsFeedScreen(Screen):
+    sources = ['abc-news', 'bbc-news', 'cnn', 'fox-news','google-news', 'nbc-news', 'the-washington-post', 'usa-today']
+    def __init__(self, app, **kwargs):
+        super(NewsFeedScreen, self).__init__(**kwargs)
+        self.app = app
+        self.fetch_articles()
+        self.name = "news_feed"
+
+        self.layout = BoxLayout(orientation='vertical')
+        self.news_label = MDLabel(text="News", font_style="H2")
+        self.layout.add_widget(self.news_label)
+
+        self.add_widget(self.layout)
+
+        self.news_label = MDLabel(text="News", font_style="H2", pos_hint={"center_x": 0.5, "top": 0.95})
+        self.layout.add_widget(self.news_label)
+
+        back_button = Button(text="Back to Login", pos_hint={"x": 0.1, "y": 0.1})
+        back_button.bind(on_release=self.go_to_login)
+        self.layout.add_widget(back_button)
+
+    def go_to_login(self, instance):
+        self.app.screen_manager.current = "login"
+        self.news_source_input = MDTextField(hint_text="Enter your favorite news source (e.g. 'CNN')", size_hint=(.8, None), height=50)
+        self.add_source_button = MDRaisedButton(text="Add", size_hint=(.2, None), height=50, pos_hint={'center_x': .5})
+        self.add_source_button.bind(on_release=self.add_source)
+        self.source_list = MDList()
+        self.card = MDCard(padding=20, size_hint=(.8, .6), pos_hint={'center_x': .5, 'center_y': .5})
+        self.layout = BoxLayout(orientation='vertical')
+        self.layout.add_widget(self.news_source_input)
+        self.layout.add_widget(self.add_source_button)
+        self.layout.add_widget(self.source_list)
+        self.card.add_widget(self.layout)
+        self.add_widget(self.card)
+        self.news_articles_label = Label(
+            text="Select a news source above to view articles.",
+            halign="center",
+            font_size='20sp',
+            size_hint_y=None,
+            height=50,
+            pos_hint={'center_x': .5, 'center_y': .5}
+        )
+        self.add_widget(self.news_articles_label)
+
+        self.load_news()
+
+    def fetch_articles(self):
+        api_key = "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"
+        url = f"https://newsapi.org/v2/top-headlines?country=us&apiKey={api_key}"
+        UrlRequest(url, on_success=self.display_articles)
+
+    def display_articles(self, request, response):
+        articles = response['articles']
+        for article in articles:
+            # Code to display articles
+
+            title = article['title']
+            description = article['description']
+            url = article['url']
+
+            item_layout = BoxLayout(orientation='vertical', size_hint_y=None, height=150)
+            title_label = Label(text=title, font_size='20sp', size_hint_y=None, height=50)
+            item_layout.add_widget(title_label)
+
+            description_label = Label(text=description, size_hint_y=None, height=50)
+            item_layout.add_widget(description_label)
+            read_more_button = Button(text="Read More", size_hint_y=None, height=50)
+            read_more_button.bind(on_release=lambda x: self.show_article(url))
+            item_layout.add_widget(read_more_button)
+           
+            self.scroll_layout.add_widget(item_layout)
+
+    def show_article(self, url):
+        app = App.get_running_app()
+        app.root.current = 'article'
+        article_screen = app.root.get_screen('article')
+        article_screen.load_article(url)
+
+    def on_enter(self, *args):
+        self.card.pos_hint = {'center_x': .5, 'center_y': .5}
+        self.news_articles_label.pos_hint = {'center_x': .5, 'center_y': .2}
+
+    def add_source(self, instance):
+        source = self.news_source_input.text.lower().replace(" ", "-")
+        if source in NewsScreen.sources:
+            Snackbar(text="This source has already been added.").open()
+        else:
+            NewsScreen.sources.append(source)
+            self.source_list.add_widget(OneLineListItem(text=source.upper()))
+            self.news_source_input.text = ""
+
+    def update_news(self, instance):
+        source = instance.text.lower()
+        url = f'https://newsapi.org/v2/top-headlines?sources={source}&apiKey={openai.api_key}'
+        UrlRequest(url, on_success=self.show_news, on_error=self.show_error)
+
+    def show_news(self, urlrequest, data):
+        articles = data['articles']
+        if len(articles) == 0:
+            self.news_articles_label.text = "No articles found for this source."
+        else:
+            self.source_list.clear_selection()
+            self.news_articles_label.text = f"Top articles from {urlrequest.url.split('=')[1].upper()}"
+            self.card.pos_hint = {'center_x': .5, 'center_y': .8}
+            self.news_articles_label.pos_hint = {'center_x': .5, 'center_y': .95}
+            self.card.remove_widget(self.layout)
+            scroll_view = ScrollView()
+            news_layout = BoxLayout(orientation='vertical',spacing=10, padding=20, size_hint_y=None)
+            news_layout.bind(minimum_height=news_layout.setter('height'))
+            for article in articles:
+                title = escape_markup(article['title'])
+                description = escape_markup(article['description'])
+                published_date = datetime.strptime(
+                article['publishedAt'][:19], '%Y-%m-%dT%H:%M:%S')
+                published_date_string = published_date.strftime('%m/%d/%Y %I:%M %p')
+                content = escape_markup(article['content']) if article['content'] is not None else ""
+                news_item = MDCard(orientation='vertical',size_hint_y=None, height=350, padding=10)
+                news_item.add_widget(Label(text=title, font_size='16sp',size_hint_y=None, height=40))
+                news_item.add_widget(Label(text=published_date_string,font_size='12sp', size_hint_y=None, height=30))
+                news_item.add_widget(Label(text=description, font_size='14sp', size_hint_y=None, height=120))
+                news_item.add_widget(Label(text=content, font_size='12sp',size_hint_y=None, height=140))
+                news_layout.add_widget(news_item)
+                scroll_view.add_widget(news_layout)
+                self.card.add_widget(scroll_view)
+
+    def show_error(self, urlrequest, error):
+        self.news_articles_label.text = f"Error: {error}"
+    
+    def load_news(self):
+        self.fetch_articles()
+
+class TestApp(MDApp):
     def build(self):
-        self.theme_cls.primary_palette = "Green"
-        self.theme_cls.theme_style = "Dark"
+        self.theme_cls.primary_palette = "BlueGray"
         self.screen_manager = ScreenManager()
-        self.user_info = {}
-        self.login_screen = LoginScreen(name='login')
+        self.screen_manager.transition = SlideTransition()
+
+        # Add the login_screen to the screen_manager
+        self.login_screen = LoginScreen(main_app=self, on_login=self.on_login_successful)
+        self.login_screen.market_analysis_button.bind(on_press=self.login_screen.go_to_market_analysis_screen)
+        self.login_screen.news_feed_button.bind(on_press=self.login_screen.go_to_news_feed_screen)
+        self.login_screen.register_button.bind(on_press=self.login_screen.register)
+        self.login_screen.profile_button.bind(on_press=self.login_screen.go_to_profile_screen)
+        self.login_screen.search_button.bind(on_press=self.login_screen.go_to_search_results_screen)
         self.screen_manager.add_widget(self.login_screen)
-        self.screen_manager.current = 'login'
-        bottom_nav = MDBottomNavigation()
-        home_item = MDBottomNavigationItem(text='Home', icon='home', on_release=lambda x: self.switch_screen('home'))
-        contact_item = MDBottomNavigationItem(text='Contact', icon='email', on_release=lambda x: self.switch_screen('contact'))
-        content_item = MDBottomNavigationItem(text='Content', icon='file-document-outline', on_release=lambda x: self.switch_screen('content'))
-        profile_item = MDBottomNavigationItem(text='Profile', icon='account', on_release=lambda x: self.switch_screen('profile'))
-        search_item = MDBottomNavigationItem(text='Search', icon='magnify', on_release=lambda x: self.switch_screen('search'))
-        bottom_nav.add_widget(home_item)
-        bottom_nav.add_widget(contact_item)
-        bottom_nav.add_widget(content_item)
-        bottom_nav.add_widget(profile_item)
-        bottom_nav.add_widget(search_item)
-        layout = RelativeLayout()
-        layout.add_widget(self.screen_manager)
-        layout.add_widget(bottom_nav)
-        return layout
 
+        # Add the other screens to the screen_manager
+        self.screen_manager.add_widget(MarketAnalysisScreen(self))
+        self.screen_manager.add_widget(NewsFeedScreen(self))
+        self.screen_manager.add_widget(SearchScreen(self))
+        self.screen_manager.add_widget(SearchResultsScreen(self))
+        self.screen_manager.add_widget(ProfileScreen(self))
+        self.screen_manager.add_widget(MainScreen(self))
 
-    def switch_screen(self, screen_name):
-        screen = next((s for s in self.screen_manager.children if s.name == screen_name), None)
-        if screen:
-            self.screen_manager.transition.direction = 'left' if self.screen_manager.current_screen.pos_hint['center_x'] < screen.pos_hint['center_x'] else 'right'
-            self.screen_manager.current = screen.name
+        # Set the current screen to login_screen
+        self.screen_manager.current = "login_screen"
+        return self.screen_manager
 
-    def on_stop(self):
-        with open('user_info.json', 'w') as file:
-            json.dump(self.user_info, file)
+    def on_login_successful(self, user_info):
+        self.user_info = user_info
+        self.root.current = "main"
 
-    def on_start(self):
-        if not os.path.isfile('user_info.json'):
-            with open('user_info.json', 'w') as file:
-                json.dump({}, file)
+if __name__ == "__main__":
+    TestApp().run()
 
-        with open('user_info.json', 'r') as file:
-            self.user_info = json.load(file)
-
-if __name__ == '__main__':
-    BoostEnhanceApp().run()
