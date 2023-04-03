@@ -1,0 +1,52 @@
+import requests
+from bs4 import BeautifulSoup
+import time
+import threading
+import os
+
+# Web scraper function that saves website data into a file every 'interval' minutes
+def web_scraper(url, interval):
+    while True:
+        # Send an HTTP GET request to the URL
+        response = requests.get(url)
+        
+        # Parse the response with BeautifulSoup
+        soup = BeautifulSoup(response.text, 'html.parser')
+        
+        # Prettify the parsed HTML
+        data = soup.prettify()
+        
+        # Create a timestamp for the file name
+        timestamp = time.strftime('%Y%m%d_%H%M%S')
+        file_name = f"traffic_data_{timestamp}.txt"
+        
+        # Save the prettified HTML to a file
+        with open(file_name, 'w') as file:
+            file.write(data)
+        
+        print(f"Data saved in {file_name}")
+        
+        # Sleep for the specified interval (in minutes) before scraping again
+        time.sleep(interval * 60)
+
+# Main function to get user input and start the scraper thread
+def main():
+    # Get the website URL from the user
+    url = input("Enter the website URL: ")
+    
+    # Get the desired scan interval from the user (between 5 and 60 minutes)
+    interval = int(input("Enter the scan interval in minutes (5-60): "))
+    interval = max(5, min(interval, 60))
+    
+    # Create a directory to store the data files
+    if not os.path.exists("data"):
+        os.mkdir("data")
+    os.chdir("data")
+    
+    # Start the scraper thread with the given URL and interval
+    scraper_thread = threading.Thread(target=web_scraper, args=(url, interval))
+    scraper_thread.start()
+
+# Run the main function when the script is executed
+if __name__ == "__main__":
+    main()
