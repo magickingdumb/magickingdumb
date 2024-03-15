@@ -1,0 +1,31 @@
+from scapy.all import *
+
+# Step 1: Scan for Open Ports
+target_ip = "23.212.251.16"
+open_ports = [80, 443]  # We know these are open; let's add more if needed
+
+# Step 2: Inspect SSL/TLS Configuration
+# For this, we would typically use SSLyze or a similar tool, but we'll assume we're doing this with Scapy for now
+# We'll just print out a message as a placeholder
+print("Inspecting SSL/TLS configuration...")
+
+# Step 3: Monitor Unencrypted Traffic
+def packet_callback(packet):
+    if packet.haslayer(TCP) and packet.haslayer(Raw):
+        if packet[TCP].dport == 80 or packet[TCP].sport == 80:
+            print(f"Unencrypted HTTP traffic detected: {packet.summary()}")
+        if packet[TCP].dport in open_ports or packet[TCP].sport in open_ports:
+            print(f"Traffic on monitored port detected: {packet.summary()}")
+
+# We'll sniff a few packets for demonstration
+sniff(prn=packet_callback, store=0, count=10)
+
+# Step 4: Examine Web3 Traffic
+# This would require understanding the specific Web3 interactions, but we'll set up a basic listener
+def web3_callback(packet):
+    if packet.haslayer(TCP) and packet.haslayer(Raw):
+        # Look for Web3 interactions; this is simplified
+        if b"web3" in packet[Raw].load:
+            print(f"Potential Web3 interaction detected: {packet.summary()}")
+
+sniff(prn=web3_callback, store=0, count=10)
